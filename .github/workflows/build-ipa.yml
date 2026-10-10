@@ -1,0 +1,29 @@
+name: Build IPA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+jobs:
+  build:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: ios
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - run: xcodegen generate
+      - name: Build (tanpa signing)
+        run: >
+          xcodebuild -project MirrorUSB.xcodeproj -scheme MirrorUSB
+          -configuration Release -sdk iphoneos -derivedDataPath build
+          CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
+      - name: Bungkus jadi .ipa
+        run: |
+          mkdir Payload
+          cp -R build/Build/Products/Release-iphoneos/MirrorUSB.app Payload/
+          zip -qr MirrorUSB.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MirrorUSB-ipa
+          path: ios/MirrorUSB.ipa
