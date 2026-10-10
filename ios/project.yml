@@ -1,0 +1,38 @@
+name: MirrorUSB
+options:
+  bundleIdPrefix: com.aziz
+  deploymentTarget:
+    iOS: "15.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+targets:
+  MirrorUSB:
+    type: application
+    platform: iOS
+    sources: [App]
+    dependencies:
+      - target: MirrorBroadcast
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Mirror USB
+        UILaunchScreen: {}
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.aziz.mirrorusb
+  MirrorBroadcast:
+    type: app-extension
+    platform: iOS
+    sources: [Broadcast]
+    info:
+      path: Broadcast/Info.plist
+      properties:
+        CFBundleDisplayName: Mirror USB
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.broadcast-services-upload
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).SampleHandler
+          RPBroadcastProcessMode: RPBroadcastProcessModeSampleBuffer
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.aziz.mirrorusb.broadcast

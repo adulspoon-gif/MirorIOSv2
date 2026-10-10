@@ -1,0 +1,90 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>MirrorUSB</title>
+<style>
+  html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:system-ui,sans-serif;color:#ddd}
+  canvas{width:100%;height:100%;object-fit:contain;display:block}
+  #msg{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;font-size:15px;line-height:1.6;white-space:pre-line}
+  #hud{position:fixed;top:6px;left:8px;font:12px monospace;color:#7f7;text-shadow:0 0 3px #000}
+</style></head>
+<body>
+<canvas id="c"></canvas>
+<div id="msg">Menunggu iPhone…</div>
+<div id="hud"></div>
+<script>
+const cv = document.getElementById('c'), msg = document.getElementById('msg'), hud = document.getElementById('hud');
+const ctx = cv.getContext('2d', { alpha: false, desynchronized: true }); // desynchronized = latensi rendah
+const hex = n => n.toString(16).padStart(2, '0');
+let dec = null, spsKey = '', needKey = true, ts = 0, pending = null, frames = 0, shown = false;
+const orients = new Map();
+
+// Cari NAL SPS (type 7) di data Annex B (start code 00 00 00 01)
+function findSps(d) {
+  for (let i = 0; i + 4 < d.length; i++) {
+    if (d[i] === 0 && d[i+1] === 0 && d[i+2] === 0 && d[i+3] === 1 && (d[i+4] & 31) === 7) {
+      let j = i + 5;
+      while (j + 3 < d.length && !(d[j] === 0 && d[j+1] === 0 && d[j+2] === 0 && d[j+3] === 1)) j++;
+      return d.subarray(i + 4, j);
+    }
+  }
+  return null;
+}
+
+function setup(sps) {
+  const key = sps.join(',');
+  if (dec && dec.state === 'configured' && key === spsKey) return;
+  if (dec && dec.state !== 'closed') dec.close();
+  spsKey = key; orients.clear();
+  dec = new VideoDecoder({
+    output: f => {
+      if (pending) pending.f.close();               // frame terbaru menang → delay tidak menumpuk
+      pending = { f, o: orients.get(f.timestamp) || 1 };
+      orients.delete(f.timestamp);
+    },
+    error: e => { console.error(e); needKey = true; },
+  });
+  dec.configure({
+    codec: `avc1.${hex(sps[1])}${hex(sps[2])}${hex(sps[3])}`,
+    optimizeForLatency: true,
+    hardwareAcceleration: 'prefer-hardware',
+    avc: { format: 'annexb' },
+  });
+}
+
+window.mirror.onFrame((key, orient, data) => {
+  if (key) {
+    const sps = findSps(data);
+    if (!sps) return;
+    setup(sps); needKey = false;
+  }
+  if (needKey || !dec || dec.state !== 'configured') return;
+  ts += 16667;
+  orients.set(ts, orient);
+  try { dec.decode(new EncodedVideoChunk({ type: key ? 'key' : 'delta', timestamp: ts, data })); }
+  catch { needKey = true; }
+});
+
+window.mirror.onStatus(t => { needKey = true; shown = false; msg.textContent = t; msg.style.display = 'flex'; });
+
+function draw() {
+  if (pending) {
+    const { f, o } = pending; pending = null;
+    const sw = f.displayWidth, sh = f.displayHeight, rot = o === 6 || o === 8;
+    const W = rot ? sh : sw, H = rot ? sw : sh;
+    if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+    ctx.setTransform(1, 0, 0, 1, W / 2, H / 2);
+    ctx.rotate(o === 6 ? Math.PI / 2 : o === 8 ? -Math.PI / 2 : o === 3 ? Math.PI : 0);
+    ctx.drawImage(f, -sw / 2, -sh / 2);
+    f.close(); frames++;
+    if (!shown) { shown = true; msg.style.display = 'none'; }
+  }
+  requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+
+setInterval(() => { hud.textContent = frames ? `${cv.width}×${cv.height} · ${frames} fps` : ''; frames = 0; }, 1000);
+
+const fs = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+addEventListener('dblclick', fs);
+addEventListener('keydown', e => { if (e.key === 'F11' || e.key === 'f') fs(); });
+</script>
+</body></html>

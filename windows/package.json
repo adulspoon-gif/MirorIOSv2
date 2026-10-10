@@ -1,0 +1,20 @@
+{
+  "name": "mirror-usb-windows",
+  "version": "1.0.0",
+  "description": "Mirror layar iPhone/iPad ke Windows lewat kabel USB",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win portable"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.aziz.mirrorusb",
+    "productName": "MirrorUSB",
+    "win": { "target": "portable" },
+    "files": ["main.js", "preload.js", "usbmux.js", "index.html"]
+  }
+}
